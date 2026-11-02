@@ -7,6 +7,11 @@
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC trivial change
+
+# COMMAND ----------
+
 dbutils.widgets.text("catalog", "dev")
 dbutils.widgets.text("source", "open_meteo")
 dbutils.widgets.text("dataset", "weather_forecast")
