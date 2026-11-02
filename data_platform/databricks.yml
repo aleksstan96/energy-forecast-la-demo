@@ -1,0 +1,42 @@
+# Data platform bundle: API ingestion → raw volume → bronze (Auto Loader).
+# Deploy:  databricks bundle deploy -t dev     (from this folder)
+# Run:     databricks bundle run ingest_hourly -t dev
+bundle:
+  name: data_platform
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog this deployment reads from and writes to.
+  notification_email:
+    description: Who gets failure emails.
+    default: ${workspace.current_user.userName}
+
+targets:
+  # Per-developer deployment. Resources get a "[dev <user>]" prefix and schedules are paused.
+  dev:
+    mode: development
+    default: true
+    workspace:
+      profile: energy-demo           # CLI profile name, not a URL: keep hosts out of the repo
+    variables:
+      catalog: dev
+
+  # Production deployment, writing to the prod catalog on customer-owned S3.
+  # TODO (CI/CD step): deploy from CI and add run_as with a service principal, so that
+  # scheduled jobs don't run as a person.
+  prod:
+    mode: production
+    workspace:
+      profile: energy-demo           # single-workspace setup for now; a prod workspace later only changes this
+      # Production mode requires an explicit root_path (one deployed copy). Use the deploying
+      # identity's home folder (restricted; the SP's home once CI deploys). Not /Workspace/Shared,
+      # which gives every workspace user write access to production code.
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: prod
+    permissions:
+      - level: CAN_MANAGE
+        user_name: ${workspace.current_user.userName}
