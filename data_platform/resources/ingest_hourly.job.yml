@@ -10,7 +10,8 @@ resources:
       schedule:
         quartz_cron_expression: "0 5 * * * ?"   # every hour at :05
         timezone_id: UTC
-        pause_status: UNPAUSED          # development mode pauses this automatically
+        # No pause_status here: development mode then pauses it, production leaves it active.
+        # (An explicit UNPAUSED would override development mode.)
       email_notifications:
         on_failure:
           - ${var.notification_email}
