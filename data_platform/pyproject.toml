@@ -1,0 +1,9 @@
+# Local tooling only (tests, linting). Not deployed: the bundle runs src/ files on serverless.
+[project]
+name = "data_platform"
+version = "0.1.0"
+requires-python = ">=3.12"     # serverless environment version 5 runs Python 3.12
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,6 +1,17 @@
-# Data platform bundle: API ingestion → raw volume → bronze (Auto Loader).
-# Deploy:  databricks bundle deploy -t dev     (from this folder)
-# Run:     databricks bundle run ingest_hourly -t dev
+# Data platform bundle: ingestion and bronze → silver → gold for the zone-production use case.
+#
+# Principles (apply to every resource added here):
+#   - Nothing environment-specific in code: catalogs and emails are variables, identities are set per target.
+#   - dev = one isolated copy per developer (development mode); prod = one copy, deployed by CI, run as a
+#     service principal.
+#   - Production code runs as Python files on serverless with a pinned environment (job environments
+#     apply to non-notebook tasks only). Notebooks are for exploration and demos.
+#   - Demo-only resources (data simulators) are defined under targets.dev, so they can't reach prod.
+#
+# Commands (from this folder):
+#   databricks bundle validate -t dev
+#   databricks bundle deploy   -t dev
+#   databricks bundle validate -t prod
 bundle:
   name: data_platform
 
@@ -14,8 +25,16 @@ variables:
     description: Who gets failure emails.
     default: ${workspace.current_user.userName}
 
+# Files that are not needed in the workspace (local tooling and tests).
+sync:
+  exclude:
+    - tests/**
+    - pyproject.toml
+    - requirements-dev.txt
+
 targets:
-  # Per-developer deployment. Resources get a "[dev <user>]" prefix and schedules are paused.
+  # Per-developer deployment: resources get a "[dev <user>]" prefix, schedules are paused,
+  # and everything runs as the developer.
   dev:
     mode: development
     default: true
@@ -24,19 +43,22 @@ targets:
     variables:
       catalog: dev
 
-  # Production deployment, writing to the prod catalog on customer-owned S3.
-  # TODO (CI/CD step): deploy from CI and add run_as with a service principal, so that
-  # scheduled jobs don't run as a person.
+  # Production: one copy, deployed by CI as the service principal, which jobs also run as.
   prod:
     mode: production
     workspace:
       profile: energy-demo           # single-workspace setup for now; a prod workspace later only changes this
-      # Production mode requires an explicit root_path (one deployed copy). Use the deploying
-      # identity's home folder (restricted; the SP's home once CI deploys). Not /Workspace/Shared,
-      # which gives every workspace user write access to production code.
+      # Production mode requires an explicit root_path. The deploying identity's home folder is
+      # restricted (the service principal's, once CI deploys). Not /Workspace/Shared, which gives
+      # every workspace user write access to production code.
       root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    # Application ID of the production service principal (an identifier, not a secret).
+    run_as:
+      service_principal_name: d27ece6e-50ff-4ba1-84ff-ed4d887d467a
     variables:
       catalog: prod
     permissions:
       - level: CAN_MANAGE
-        user_name: ${workspace.current_user.userName}
+        service_principal_name: d27ece6e-50ff-4ba1-84ff-ed4d887d467a
+      - level: CAN_VIEW
+        group_name: users

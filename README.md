@@ -10,20 +10,40 @@ REST API ingestion → Unity Catalog volumes → bronze / silver / gold → MLfl
 | prod | `prod` | customer-owned S3 (external location) | service principal only (bundle `prod` target) |
 
 Data is ingested once, into `prod`. Development reads `prod` read-only and writes only to `dev`.
-A `staging` catalog and workspace-level separation are added with the MLOps (MLOps Stacks) setup.
+A `staging` catalog and workspace-level separation can be added in the MLOps phase (MLOps Quickstart pattern).
 
 ## Unity Catalog layout (same in every catalog)
 ```
 <catalog>
- ├── raw        volumes: api_landing (/<source>/<dataset>/ingest_date=YYYY-MM-DD/<ts>.json), historical
+ ├── raw        volumes: api_landing (/<source>/<dataset>/ingest_date=YYYY-MM-DD/<file>), historical (/<source>/<dataset>/*.jsonl)
  ├── bronze     <source>_<dataset> tables (append-only), volume: checkpoints
  ├── silver     cleaned, UTC-normalised, deduplicated
  └── gold       features + forecast output
 ```
 
-## Repo layout (planned)
+## Sources (simulated in dev; formats follow the providers' documented APIs)
+| Source | Dataset | Cadence | Format notes |
+|---|---|---|---|
+| Terna (grid operator) | total load (actual + forecast, per bidding zone) | daily | local time + UTC offset per record, numbers as strings |
+| Terna | actual generation (national, by primary source) | daily | hourly GWh as strings |
+| GME (market operator) | MGP zonal prices | daily | hourly until 30 Sep 2025, 15-minute periods from 1 Oct 2025 |
+| Meteologica (forecast provider) | power, solar and wind forecasts per zone | several issues a day | 15-minute rows, local From/To + UTC offset, values as strings |
+
+## Repo layout
 ```
 data_platform/      bundle: ingestion + bronze/silver/gold jobs and pipelines
-zone_production/    bundle: ML project generated from MLOps Stacks (later)
-.github/workflows/  CI/CD
+  databricks.yml    targets (dev per developer, prod as a service principal), variables
+  resources/        jobs and pipelines (*.yml)
+  src/              code deployed with the bundle
+  tests/            unit tests, run locally and in CI (not deployed)
+zone_production/    bundle: ML project (MLOps Quickstart pattern, later)
+.github/workflows/  CI/CD (later)
+```
+
+## Local checks
+```
+cd data_platform
+python -m venv .venv && . .venv/bin/activate && pip install -r requirements-dev.txt
+pytest
+databricks bundle validate -t dev
 ```

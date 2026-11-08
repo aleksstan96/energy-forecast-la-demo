@@ -1,6 +1,9 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Fetch from a REST API and land the raw response
+# MAGIC # Fetch from a REST API and land the raw response (showcase notebook)
+# MAGIC Run interactively to show the pattern: parameters, Unity Catalog secrets and landing raw files. It isn't scheduled;
+# MAGIC the simulated sources (Terna, GME, Meteologica) produce the data the pipelines use.
+# MAGIC
 # MAGIC Writes the response **exactly as received** to
 # MAGIC `/Volumes/<catalog>/raw/api_landing/<source>/<dataset>/ingest_date=YYYY-MM-DD/<request_ts>.json`.
 # MAGIC No parsing or flattening here: that happens in bronze/silver, so a failed transformation never loses source data.
