@@ -4,14 +4,18 @@
 #   - Nothing environment-specific in code: catalogs and emails are variables, identities are set per target.
 #   - dev = one isolated copy per developer (development mode); prod = one copy, deployed by CI, run as a
 #     service principal.
-#   - Production code runs as Python files on serverless with a pinned environment (job environments
-#     apply to non-notebook tasks only). Notebooks are for exploration and demos.
+#   - Logic lives in importable modules under src/ with unit tests in tests/. Entry points can be notebooks
+#     or Python files; both run on serverless (no cluster blocks).
+#   - Environments are pinned: notebooks in their own environment (saved in the notebook source),
+#     Python file tasks in a job-level environment, on the latest serverless environment version.
+#   - Batch jobs use performance_target: STANDARD unless a deadline needs PERFORMANCE_OPTIMIZED.
 #   - Demo-only resources (data simulators) are defined under targets.dev, so they can't reach prod.
+#   - Resource files are named <name>.<type>.yml (e.g. simulate_live.job.yml).
 #
 # Commands (from this folder):
-#   databricks bundle validate -t dev
-#   databricks bundle deploy   -t dev
-#   databricks bundle validate -t prod
+#   databricks bundle validate --strict -t dev
+#   databricks bundle deploy -t dev
+#   databricks bundle validate --strict -t prod   # clean only when run as the service principal (CI)
 bundle:
   name: data_platform
 
@@ -31,6 +35,8 @@ sync:
     - tests/**
     - pyproject.toml
     - requirements-dev.txt
+    - AGENTS.md
+    - CLAUDE.md
 
 targets:
   # Per-developer deployment: resources get a "[dev <user>]" prefix, schedules are paused,
