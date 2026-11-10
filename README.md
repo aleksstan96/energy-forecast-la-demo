@@ -12,6 +12,9 @@ REST API ingestion → Unity Catalog volumes → bronze / silver / gold → MLfl
 Data is ingested once, into `prod`. Development reads `prod` read-only and writes only to `dev`.
 A `staging` catalog and workspace-level separation can be added in the MLOps phase (MLOps Quickstart pattern).
 
+## Where the code lives
+The Git folder is the code you edit. GitHub is the truth. The bundle copy is what runs, deployed per target. Dev is yours to break, and prod is deployed by CI as the service principal.
+
 ## Unity Catalog layout (same in every catalog)
 ```
 <catalog>
