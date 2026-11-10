@@ -1,0 +1,19 @@
+# Bronze pipeline: raw landing files -> bronze streaming tables, one table per source/dataset.
+# Bronze keeps the data as received (plus ingestion metadata); parsing and cleaning happen in silver.
+resources:
+  pipelines:
+    bronze:
+      name: bronze
+      # Tables are published to <catalog>.bronze; the catalog comes from the target (dev or prod).
+      catalog: ${var.catalog}
+      schema: bronze
+      serverless: true                 # serverless pipeline: no cluster configuration
+      # Values available to the SQL files as ${landing_root}, so no path is hard-coded in the code.
+      configuration:
+        landing_root: /Volumes/${var.catalog}/raw/api_landing
+      # Every .sql/.py file in this folder is part of the pipeline: one file per bronze table.
+      libraries:
+        - glob:
+            include: ../src/pipelines/bronze/**
+      # Folder the pipeline editor opens when the pipeline is edited in the workspace.
+      root_path: ../src/pipelines/bronze

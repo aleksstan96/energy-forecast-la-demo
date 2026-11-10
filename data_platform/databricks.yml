@@ -48,6 +48,33 @@ targets:
       profile: energy-demo           # CLI profile name, not a URL: keep hosts out of the repo
     variables:
       catalog: dev
+    # Demo-only resources: defined here, not in resources/, so a prod deployment never contains them.
+    resources:
+      jobs:
+        simulate_meteologica:
+          name: simulate_meteologica
+          description: "Demo only: lands simulated Meteologica forecast files in ${var.catalog}.raw.api_landing"
+          max_concurrent_runs: 1
+          performance_target: STANDARD          # batch with no deadline: cheaper, slower start
+          parameters:
+            - name: catalog
+              default: ${var.catalog}
+          # Pinned serverless environment (overrides the notebook's own environment).
+          environments:
+            - environment_key: default
+              spec:
+                environment_version: "6"       # latest serverless environment version
+          tasks:
+            - task_key: land_meteologica
+              environment_key: default
+              notebook_task:
+                notebook_path: ./src/notebooks/land_meteologica.py   # paths in databricks.yml are relative to it
+                base_parameters:
+                  start_date: "2026-10-20"
+                  end_date: "2026-11-09"
+          tags:
+            layer: raw
+            purpose: demo-simulation
 
   # Production: one copy, deployed by CI as the service principal, which jobs also run as.
   prod:
