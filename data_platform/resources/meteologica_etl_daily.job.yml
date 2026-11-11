@@ -1,0 +1,25 @@
+# Orchestration job: runs the pipeline on a schedule. Pipelines are scheduled through a job (pipeline_task);
+# this is also where an API fetch task would go, before the pipeline task.
+resources:
+  jobs:
+    meteologica_etl_daily:
+      name: meteologica_etl_daily
+      max_concurrent_runs: 1
+      performance_target: STANDARD               # batch with no tight deadline: lower cost, slower start
+      schedule:
+        quartz_cron_expression: "0 0 7 * * ?"   # daily at 07:00
+        timezone_id: Europe/Rome
+        # No pause_status: development mode deploys it paused, production mode leaves it active.
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}
+      tasks:
+        # Example of where a fetch step would go (a notebook task that lands new files), e.g.:
+        # - task_key: fetch_meteologica
+        #   notebook_task:
+        #     notebook_path: ../src/ingestion/fetch_api.py
+        - task_key: refresh_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.meteologica_etl.id}   # substitution: ID of a resource in this bundle
+      tags:
+        layer: bronze-silver

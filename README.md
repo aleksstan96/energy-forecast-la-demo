@@ -36,8 +36,13 @@ The Git folder is the code you edit. GitHub is the truth. The bundle copy is wha
 ```
 data_platform/      bundle: ingestion + bronze/silver/gold jobs and pipelines
   databricks.yml    targets (dev per developer, prod as a service principal), variables
-  resources/        jobs and pipelines (*.yml)
-  src/              code deployed with the bundle
+  resources/        jobs and pipelines (<name>.<type>.yml)
+  src/
+    pipelines/meteologica/
+      transformations/   pipeline source code: bronze (SQL) -> silver (Python) -> silver "latest" (SQL)
+      explorations/      notebooks for analysis, not run by the pipeline
+    simulation/, notebooks/   demo-only simulated data (dev target only)
+    ingestion/        showcase notebook: API call with parameters and Unity Catalog secrets
   tests/            unit tests, run locally and in CI (not deployed)
 zone_production/    bundle: ML project (MLOps Quickstart pattern, later)
 .github/workflows/  CI/CD (later)

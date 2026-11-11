@@ -1,0 +1,22 @@
+# Lakeflow Spark Declarative Pipeline: raw landing files -> bronze -> silver.
+# One pipeline can publish to several schemas: tables without a schema prefix go to the default schema below,
+# tables named "silver.<name>" go to the silver schema of the same catalog.
+resources:
+  pipelines:
+    meteologica_etl:
+      name: meteologica_etl
+      catalog: ${var.catalog}            # dev or prod, set per target
+      schema: bronze                     # default schema for unqualified table names
+      serverless: true                   # serverless pipeline: no cluster configuration
+      # Values passed into the source code: ${key} in SQL, spark.conf.get("key") in Python.
+      # Bundle variables feed them, so dev and prod can differ without changing the code.
+      configuration:
+        landing_root: /Volumes/${var.catalog}/raw/api_landing
+        sample_pct: ${var.silver_sample_pct}
+      # Only files under transformations/ are pipeline source code (SQL and Python can be mixed).
+      # Files elsewhere, such as explorations/, are not run by the pipeline.
+      libraries:
+        - glob:
+            include: ../src/pipelines/meteologica/transformations/**
+      # Folder the pipeline editor opens, including explorations/.
+      root_path: ../src/pipelines/meteologica

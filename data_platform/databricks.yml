@@ -28,6 +28,9 @@ variables:
   notification_email:
     description: Who gets failure emails.
     default: ${workspace.current_user.userName}
+  silver_sample_pct:
+    description: Percentage of bronze files the silver layer processes (100 = all). Lower in dev for faster runs.
+    default: "100"
 
 # Files that are not needed in the workspace (local tooling and tests).
 sync:
@@ -48,6 +51,7 @@ targets:
       profile: energy-demo           # CLI profile name, not a URL: keep hosts out of the repo
     variables:
       catalog: dev
+      silver_sample_pct: "50"          # dev processes half of the files; prod uses the default (100)
     # Demo-only resources: defined here, not in resources/, so a prod deployment never contains them.
     resources:
       jobs:
