@@ -6,6 +6,8 @@
 # MAGIC   plus calendar features;
 # MAGIC - **target:** the GME CNOR zonal price.
 # MAGIC
+# MAGIC Source: the gold data product `gold.cnor_market_15min` (owned by the data platform). The ML side reads gold only.
+# MAGIC
 # MAGIC **Point-in-time correctness:** for each interval, only the latest forecast issued before the decision time is used.
 # MAGIC Using later forecasts in training would leak information the model won't have when it predicts.
 # MAGIC
@@ -45,38 +47,31 @@ COMMENT 'Features and target for the CNOR day-ahead price model. One row per 15-
 
 spark.sql(f"""
 INSERT INTO {table}
-WITH labels AS (
-  SELECT interval_start_utc, local_date, quarter_hour, CAST(price_eur_mwh AS DOUBLE) AS target_price
-  FROM {catalog}.silver.gme_zonal_prices
-  WHERE zone = 'CNOR'
+WITH market AS (                     -- the gold data product: actuals + every forecast issue per interval
+  SELECT * FROM {catalog}.gold.cnor_market_15min
 ),
 available AS (                       -- forecasts issued before gate closure (D-1 12:00 local) of each delivery day
-  SELECT f.content_id, f.interval_start_utc, f.issued_at_utc, CAST(f.forecast AS DOUBLE) AS forecast
-  FROM {catalog}.silver.meteologica_forecasts_15min f
-  JOIN labels l USING (interval_start_utc)
-  WHERE f.issued_at_utc <= to_utc_timestamp(CAST(date_sub(l.local_date, 1) AS TIMESTAMP) + INTERVAL 12 HOURS, 'Europe/Rome')
+  SELECT * FROM market
+  WHERE forecast_issued_at_utc <= to_utc_timestamp(CAST(date_sub(local_date, 1) AS TIMESTAMP) + INTERVAL 12 HOURS, 'Europe/Rome')
 ),
 latest AS (                          -- latest such forecast per series and interval
   SELECT * FROM available
-  QUALIFY row_number() OVER (PARTITION BY content_id, interval_start_utc ORDER BY issued_at_utc DESC) = 1
-),
-features AS (
-  SELECT interval_start_utc,
-         max(CASE WHEN content_id = 7872 THEN forecast END) AS price_fc,
-         max(CASE WHEN content_id = 9101 THEN forecast END) AS solar_sud_fc,
-         max(CASE WHEN content_id = 9103 THEN forecast END) AS solar_nord_fc,
-         max(CASE WHEN content_id = 9102 THEN forecast END) AS wind_sici_fc,
-         max(issued_at_utc)                                  AS forecast_issued_at_utc
-  FROM latest GROUP BY interval_start_utc
+  QUALIFY row_number() OVER (PARTITION BY forecast_series_id, interval_start_utc ORDER BY forecast_issued_at_utc DESC) = 1
 )
-SELECT l.interval_start_utc, l.local_date, l.quarter_hour,
-       hour(from_utc_timestamp(l.interval_start_utc, 'Europe/Rome')) AS hour_local,
-       dayofweek(l.local_date)                                      AS day_of_week,
-       dayofweek(l.local_date) IN (1, 7)                            AS is_weekend,
-       f.price_fc, f.solar_sud_fc, f.solar_nord_fc, f.wind_sici_fc, f.forecast_issued_at_utc,
-       l.target_price
-FROM labels l JOIN features f USING (interval_start_utc)
+SELECT interval_start_utc, local_date, quarter_hour,
+       hour(from_utc_timestamp(interval_start_utc, 'Europe/Rome')) AS hour_local,
+       dayofweek(local_date)                                       AS day_of_week,
+       dayofweek(local_date) IN (1, 7)                             AS is_weekend,
+       max(CASE WHEN forecast_series_id = 7872 THEN forecast_value END) AS price_fc,
+       max(CASE WHEN forecast_series_id = 9101 THEN forecast_value END) AS solar_sud_fc,
+       max(CASE WHEN forecast_series_id = 9103 THEN forecast_value END) AS solar_nord_fc,
+       max(CASE WHEN forecast_series_id = 9102 THEN forecast_value END) AS wind_sici_fc,
+       max(forecast_issued_at_utc)                                      AS forecast_issued_at_utc,
+       max(actual_price_eur_mwh)                                        AS target_price
+FROM latest
+GROUP BY interval_start_utc, local_date, quarter_hour
 """)
+
 
 # COMMAND ----------
 

@@ -3,7 +3,7 @@
 # MAGIC # 4. Batch inference
 # MAGIC Loads the **champion** model and scores the feature table in Spark. Results go to a predictions table with the
 # MAGIC model version and scoring time, so every prediction can be traced back to the model that produced it, and compared
-# MAGIC with actuals for monitoring.
+# MAGIC with actuals for monitoring. A view in `gold` exposes the forecast to consumers.
 
 # COMMAND ----------
 
@@ -50,6 +50,21 @@ spark.sql(f"""CREATE TABLE IF NOT EXISTS {predictions} (
 scored.createOrReplaceTempView("new_predictions")
 spark.sql(f"""MERGE INTO {predictions} t USING new_predictions s ON t.interval_start_utc = s.interval_start_utc
               WHEN MATCHED THEN UPDATE SET * WHEN NOT MATCHED THEN INSERT *""")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Publish to gold
+# MAGIC Consumers (dashboards, the trading system) read a stable view in `gold`, never the ML schema. A Unity Catalog view
+# MAGIC runs with its owner's access to the underlying table, so consumers only need SELECT on the view itself.
+
+# COMMAND ----------
+
+spark.sql(f"""CREATE OR REPLACE VIEW {catalog}.gold.cnor_price_forecast
+  COMMENT 'CNOR 15-minute price forecast from the current champion model. The consumer-facing output.'
+  AS SELECT interval_start_utc, local_date, quarter_hour,
+            predicted_price AS forecast_price_eur_mwh, model_version, scored_at
+     FROM {predictions}""")
 
 summary = spark.sql(f"""SELECT count(*) AS rows, max(model_version) AS model_version,
                         round(avg(abs(predicted_price - actual_price)), 2) AS mae FROM {predictions}""").first()

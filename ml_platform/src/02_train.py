@@ -2,8 +2,9 @@
 # MAGIC %md
 # MAGIC # 2. Train and register the model
 # MAGIC - Time-based split: the last days are held out as the test set (never a random split for time series).
-# MAGIC - LightGBM, tracked with MLflow autologging; metrics compared with a naive baseline (the provider's price forecast).
-# MAGIC - Registered in Unity Catalog with a signature and alias **challenger**.
+# MAGIC - Three LightGBM variants, each an MLflow run (nested under one parent run), compared on the same test set and
+# MAGIC   against a naive baseline (the provider's price forecast as-is).
+# MAGIC - Only the **best** variant is registered in Unity Catalog, with a signature and alias **challenger**.
 # MAGIC - The registered model is connected to the deployment job, which starts automatically for the new version.
 
 # COMMAND ----------
@@ -56,31 +57,44 @@ except mlflow.exceptions.MlflowException:
     client.create_registered_model(full_name, deployment_job_id=deployment_job_id or None,
                                    description="CNOR day-ahead price forecast (15-minute), LightGBM.")
 
-mlflow.lightgbm.autolog(log_models=False)         # params and training metrics; the model is logged explicitly below
+mlflow.lightgbm.autolog(log_models=False)         # params and training metrics per run; models logged explicitly
 
-with mlflow.start_run(run_name="lightgbm_cnor_price") as run:
-    model = lgb.LGBMRegressor(n_estimators=300, learning_rate=0.05, num_leaves=15, random_state=42, verbose=-1)
-    model.fit(X_train, y_train)
+# Model variants to compare (could also come from job parameters).
+VARIANTS = {
+    "lgbm_small_fast":   dict(n_estimators=100, learning_rate=0.10, num_leaves=63),
+    "lgbm_baseline":     dict(n_estimators=300, learning_rate=0.05, num_leaves=15),
+    "lgbm_regularised":  dict(n_estimators=600, learning_rate=0.02, num_leaves=7, min_child_samples=40),
+}
+baseline_mae = float(np.mean(np.abs(X_test["price_fc"] - y_test)))   # the provider's forecast, as-is
 
-    pred = model.predict(X_test)
-    metrics = {
-        "test_mae": float(np.mean(np.abs(pred - y_test))),
-        "test_rmse": float(np.sqrt(np.mean((pred - y_test) ** 2))),
-        "baseline_mae": float(np.mean(np.abs(X_test["price_fc"] - y_test))),   # provider forecast as-is
-        "train_rows": len(train), "test_rows": len(test),
-    }
-    mlflow.log_metrics(metrics)
-    mlflow.log_params({"test_from": str(cutoff), "features": ",".join(FEATURES)})
+results = {}
+with mlflow.start_run(run_name="cnor_price_training") as parent:
+    mlflow.log_params({"test_from": str(cutoff), "features": ",".join(FEATURES), "variants": ",".join(VARIANTS)})
+    mlflow.log_metric("baseline_mae", baseline_mae)
+    for name, params in VARIANTS.items():
+        with mlflow.start_run(run_name=name, nested=True) as child:          # one run per variant
+            model = lgb.LGBMRegressor(random_state=42, verbose=-1, **params).fit(X_train, y_train)
+            pred = model.predict(X_test)
+            metrics = {"test_mae": float(np.mean(np.abs(pred - y_test))),
+                       "test_rmse": float(np.sqrt(np.mean((pred - y_test) ** 2))),
+                       "baseline_mae": baseline_mae}
+            mlflow.log_metrics(metrics)
+            # Log the model with every run (not registered yet), so any run could be registered later.
+            logged = mlflow.lightgbm.log_model(model, name="model", signature=infer_signature(X_test, pred),
+                                               input_example=X_test.head(5))
+            results[name] = {"run_id": child.info.run_id, "model_uri": logged.model_uri, **metrics}
 
-    info = mlflow.lightgbm.log_model(
-        model, name="model",
-        signature=infer_signature(X_test, pred),       # input/output schema, checked at scoring time
-        input_example=X_test.head(5),
-        registered_model_name=full_name,               # creates a new version in Unity Catalog
-    )
+    best_name = min(results, key=lambda n: results[n]["test_mae"])
+    best = results[best_name]
+    mlflow.log_params({"best_variant": best_name})
+    mlflow.log_metric("best_test_mae", best["test_mae"])
 
-version = info.registered_model_version
+# Register only the best run's model: one new version in Unity Catalog (this triggers the deployment job).
+mv = mlflow.register_model(best["model_uri"], full_name)
+client.set_model_version_tag(full_name, mv.version, "variant", best_name)
+version = mv.version
 client.set_registered_model_alias(full_name, "challenger", version)   # aliases replace the old "stages"
-result = {"model": full_name, "version": version, **{k: round(v, 3) for k, v in metrics.items() if "mae" in k or "rmse" in k}}
+result = {"model": full_name, "version": version, "best_variant": best_name,
+          "runs": {n: round(r["test_mae"], 3) for n, r in results.items()}, "baseline_mae": round(baseline_mae, 3)}
 print(result)
 dbutils.notebook.exit(json.dumps(result))
