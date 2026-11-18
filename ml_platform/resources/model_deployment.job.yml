@@ -1,0 +1,50 @@
+# 3. Deployment job (MLflow 3): connected to the registered model, it runs automatically for every new model
+# version. It must have the job parameters model_name and model_version.
+#   evaluation -> approval_check (waits for a human Approve in the model version UI) -> deployment ("champion").
+# Approval tasks are recognised by a task name starting with "approval"; the approval sets a Unity Catalog tag
+# named after the task on the model version.
+resources:
+  jobs:
+    model_deployment:
+      name: model_deployment
+      max_concurrent_runs: 1
+      performance_target: STANDARD
+      email_notifications:
+        on_failure: [ "${var.notification_email}" ]
+      parameters:
+        - name: model_name
+          default: ${var.catalog}.${var.schema}.${var.model_name}
+        - name: model_version
+          default: ""
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+      environments:
+        - environment_key: ml
+          spec: ${var.ml_environment}
+      tasks:
+        - task_key: evaluation
+          environment_key: ml
+          notebook_task:
+            notebook_path: ../src/03_evaluation.py
+            base_parameters:                         # passed explicitly to each task (as in the MLOps Quickstart)
+              model_name: "{{job.parameters.model_name}}"
+              model_version: "{{job.parameters.model_version}}"
+        - task_key: approval_check
+          depends_on: [ { task_key: evaluation } ]
+          environment_key: ml
+          max_retries: 0                             # an unapproved version fails here until someone approves
+          notebook_task:
+            notebook_path: ../src/03_approval.py
+            base_parameters:                         # passed explicitly to each task (as in the MLOps Quickstart)
+              model_name: "{{job.parameters.model_name}}"
+              model_version: "{{job.parameters.model_version}}"
+        - task_key: deployment
+          depends_on: [ { task_key: approval_check } ]
+          environment_key: ml
+          notebook_task:
+            notebook_path: ../src/03_deployment.py
+            base_parameters:                         # passed explicitly to each task (as in the MLOps Quickstart)
+              model_name: "{{job.parameters.model_name}}"
+              model_version: "{{job.parameters.model_version}}"

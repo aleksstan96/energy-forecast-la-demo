@@ -4,7 +4,7 @@
 resources:
   pipelines:
     meteologica_etl:
-      name: meteologica_etl
+      name: market_data_etl
       catalog: ${var.catalog}            # dev or prod, set per target
       schema: bronze                     # default schema for unqualified table names
       serverless: true                   # serverless pipeline: no cluster configuration
@@ -17,6 +17,6 @@ resources:
       # Files elsewhere, such as explorations/, are not run by the pipeline.
       libraries:
         - glob:
-            include: ../src/pipelines/meteologica/transformations/**
+            include: ../src/pipelines/market_data/transformations/**
       # Folder the pipeline editor opens, including explorations/.
-      root_path: ../src/pipelines/meteologica
+      root_path: ../src/pipelines/market_data

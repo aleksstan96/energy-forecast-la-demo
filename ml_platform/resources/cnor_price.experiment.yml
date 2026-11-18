@@ -1,0 +1,5 @@
+# MLflow experiment managed by the bundle, so every target gets its own experiment without manual setup.
+resources:
+  experiments:
+    cnor_price:
+      name: /Users/${workspace.current_user.userName}/${bundle.name}_cnor_price

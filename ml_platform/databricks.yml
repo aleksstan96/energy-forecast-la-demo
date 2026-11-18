@@ -1,0 +1,62 @@
+# ML bundle: feature table -> training -> deployment job (evaluation, approval, deployment) -> batch inference.
+# Same structure as the MLOps Quickstart (databricks-solutions/mlops-quickstart):
+#   - one job per stage, all on serverless, parameterised by catalog/schema per target;
+#   - models registered in Unity Catalog, promoted with aliases ("challenger" -> "champion");
+#   - an MLflow deployment job connected to the model: it runs on every new model version and waits for approval.
+# Kept separate from the data bundle (data_platform): ML assets have their own lifecycle and permissions.
+#
+# Commands (from this folder):
+#   databricks bundle validate --strict -t dev
+#   databricks bundle deploy -t dev
+#   databricks bundle run feature_table -t dev, then model_training, then batch_inference
+bundle:
+  name: ml_platform
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for this deployment.
+  schema:
+    description: Schema for ML assets (feature tables, model, predictions).
+    default: ml
+  model_name:
+    description: Registered model name; the full name is <catalog>.<schema>.<model_name>.
+    default: cnor_price_model
+  notification_email:
+    description: Who gets failure emails.
+    default: ${workspace.current_user.userName}
+  # A complex variable: one pinned serverless environment shared by every ML task.
+  ml_environment:
+    description: Serverless environment for ML tasks (pinned versions, for reproducible training and scoring).
+    type: complex
+    default:
+      environment_version: "6"
+      dependencies:
+        - lightgbm==4.7.0
+        - mlflow==3.18.0
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      profile: energy-demo
+    variables:
+      catalog: dev
+
+  prod:
+    mode: production
+    workspace:
+      profile: energy-demo
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    run_as:
+      service_principal_name: d27ece6e-50ff-4ba1-84ff-ed4d887d467a
+    variables:
+      catalog: prod
+    permissions:
+      - level: CAN_MANAGE
+        service_principal_name: d27ece6e-50ff-4ba1-84ff-ed4d887d467a
+      - level: CAN_VIEW
+        group_name: users

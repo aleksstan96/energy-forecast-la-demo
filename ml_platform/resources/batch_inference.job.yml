@@ -1,0 +1,27 @@
+# 4. Batch inference: scores the feature table with the "champion" model and writes a predictions table.
+resources:
+  jobs:
+    batch_inference:
+      name: batch_inference
+      max_concurrent_runs: 1
+      performance_target: STANDARD
+      schedule:
+        quartz_cron_expression: "0 0 8 * * ?"      # daily 08:00, after the feature table
+        timezone_id: Europe/Rome
+      email_notifications:
+        on_failure: [ "${var.notification_email}" ]
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: model_name
+          default: ${var.model_name}
+      environments:
+        - environment_key: ml
+          spec: ${var.ml_environment}
+      tasks:
+        - task_key: score
+          environment_key: ml
+          notebook_task:
+            notebook_path: ../src/04_batch_inference.py

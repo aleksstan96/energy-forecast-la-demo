@@ -44,7 +44,10 @@ data_platform/      bundle: ingestion + bronze/silver/gold jobs and pipelines
     simulation/, notebooks/   demo-only simulated data (dev target only)
     ingestion/        showcase notebook: API call with parameters and Unity Catalog secrets
   tests/            unit tests, run locally and in CI (not deployed)
-zone_production/    bundle: ML project (MLOps Quickstart pattern, later)
+ml_platform/        bundle: ML project (MLOps Quickstart pattern)
+  resources/        experiment + jobs: feature_table, model_training, model_deployment (evaluation ->
+                    approval -> champion), batch_inference
+  src/              01_feature_table, 02_train, 03_evaluation/approval/deployment, 04_batch_inference
 .github/workflows/  CI/CD (later)
 ```
 

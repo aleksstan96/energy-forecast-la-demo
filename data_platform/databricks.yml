@@ -57,7 +57,7 @@ targets:
       jobs:
         simulate_meteologica:
           name: simulate_meteologica
-          description: "Demo only: lands simulated Meteologica forecast files in ${var.catalog}.raw.api_landing"
+          description: "Demo only: lands simulated Meteologica forecasts and GME prices in ${var.catalog}.raw.api_landing"
           max_concurrent_runs: 1
           performance_target: STANDARD          # batch with no deadline: cheaper, slower start
           parameters:
@@ -76,6 +76,13 @@ targets:
                 base_parameters:
                   start_date: "2026-10-20"
                   end_date: "2026-11-09"
+            - task_key: land_gme
+              environment_key: default
+              notebook_task:
+                notebook_path: ./src/notebooks/land_gme.py
+                base_parameters:
+                  start_date: "2026-10-21"
+                  end_date: "2026-11-10"
           tags:
             layer: raw
             purpose: demo-simulation

@@ -1,0 +1,32 @@
+# 2. Training: trains, logs to MLflow, registers a new version in Unity Catalog with alias "challenger".
+# Registering a version starts the deployment job connected to the model (see model_deployment.job.yml).
+resources:
+  jobs:
+    model_training:
+      name: model_training
+      max_concurrent_runs: 1
+      performance_target: STANDARD
+      schedule:
+        quartz_cron_expression: "0 0 6 ? * MON"    # weekly retraining
+        timezone_id: Europe/Rome
+      email_notifications:
+        on_failure: [ "${var.notification_email}" ]
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: model_name
+          default: ${var.model_name}
+        - name: experiment_id
+          default: ${resources.experiments.cnor_price.id}          # substitution: ID of the bundle's experiment
+        - name: deployment_job_id
+          default: ${resources.jobs.model_deployment.id}           # substitution: ID of the deployment job
+      environments:
+        - environment_key: ml
+          spec: ${var.ml_environment}
+      tasks:
+        - task_key: train_model
+          environment_key: ml
+          notebook_task:
+            notebook_path: ../src/02_train.py
